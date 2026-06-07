@@ -1,0 +1,64 @@
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+
+function App() {
+  const [accountsText, setAccountsText] = useState('');
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    // Слушаем логи из бэкенда Electron
+    window.api.onLog((message) => {
+      setLogs((prev) => [...prev, message]);
+    });
+  }, []);
+
+  const handleStart = async () => {
+    await window.api.startTasks({
+      rawAccounts: accountsText,
+      taskType: 'boost_hours',
+      minDelay: 2000,
+      maxDelay: 5000
+    });
+  };
+
+  return (
+    <div style={{ backgroundColor: '#0f172a', color: 'white', minHeight: '100vh', padding: '2rem', fontFamily: 'sans-serif' }}>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: '#1e293b', padding: '2rem', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)' }}
+      >
+        <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>👁️ Панель Управления Steam</h1>
+        
+        <p style={{ marginBottom: '0.5rem', color: '#94a3b8' }}>Формат аккаунтов: login:pass:shared_secret:identity</p>
+        <textarea 
+          rows="5"
+          value={accountsText}
+          onChange={(e) => setAccountsText(e.target.value)}
+          style={{ width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', border: '1px solid #334155', borderRadius: '0.5rem', marginBottom: '1rem' }}
+          placeholder="Вставьте аккаунты сюда..."
+        />
+
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleStart}
+            style={{ padding: '0.75rem 1.5rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            Запустить накрутку часов
+          </motion.button>
+        </div>
+
+        <div style={{ backgroundColor: '#000', padding: '1rem', borderRadius: '0.5rem', height: '200px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+          {logs.map((log, index) => (
+            <div key={index} style={{ color: '#10b981', marginBottom: '0.25rem' }}>{`> ${log}`}</div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+export default App;

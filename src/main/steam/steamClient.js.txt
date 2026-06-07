@@ -1,0 +1,61 @@
+import SteamUser from 'steam-user';
+import SteamTotp from 'steam-totp';
+
+export class SteamClientManager {
+  constructor() {
+    this.clients = new Map(); // Храним активные сессии
+  }
+
+  // Парсинг аккаунтов из формата login:pass:shared:identity
+  parseAccounts(rawText) {
+    const accounts = [];
+    const lines = rawText.split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const [username, password, sharedSecret, identitySecret] = line.trim().split(':');
+      if (username && password) {
+        accounts.push({ username, password, sharedSecret, identitySecret });
+      }
+    }
+    return accounts;
+  }
+
+  // Авторизация и запуск накрутки часов
+  async boostHours(account, appIds = [730]) {
+    return new Promise((resolve, reject) => {
+      if (this.clients.has(account.username)) {
+        return resolve('Уже в сети');
+      }
+
+      const client = new SteamUser();
+      
+      const logOnOptions = {
+        accountName: account.username,
+        password: account.password,
+      };
+
+      if (account.sharedSecret) {
+        logOnOptions.twoFactorCode = SteamTotp.generateAuthCode(account.sharedSecret);
+      }
+
+      client.logOn(logOnOptions);
+
+      client.on('loggedOn', () => {
+        client.setPersona(SteamUser.EPersonaState.Online);
+        client.gamesPlayed(appIds);
+        this.clients.set(account.username, client);
+        resolve(`Успешно: ${account.username} крутит часы`);
+      });
+
+      client.on('error', (err) => {
+        reject(`Ошибка ${account.username}: ${err.message}`);
+      });
+    });
+  }
+
+  // Заглушка для комментариев (для интеграции steamcommunity)
+  async leaveComment(account, profileId, message) {
+     // Здесь будет логика из steam-comment-service-bot
+     return Promise.resolve(`Комментарий оставлен от ${account.username}`);
+  }
+}

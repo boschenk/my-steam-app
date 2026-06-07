@@ -1,0 +1,25 @@
+import async from 'async';
+
+export function createQueue(steamManager, concurrency = 5, sendLogToUI) {
+  return async.queue(async (task, callback) => {
+    try {
+      sendLogToUI(`Начинаю задачу: ${task.type} для ${task.account.username}`);
+      
+      if (task.type === 'boost_hours') {
+        const result = await steamManager.boostHours(task.account, [730]);
+        sendLogToUI(result);
+      }
+      // Здесь можно добавить 'comment', 'like' и т.д.
+
+      // Имитация разброса времени между действиями
+      const delay = Math.floor(Math.random() * (task.maxDelay - task.minDelay + 1) + task.minDelay);
+      sendLogToUI(`Ожидание ${delay / 1000} сек...`);
+      await new Promise(res => setTimeout(res, delay));
+
+      callback();
+    } catch (err) {
+      sendLogToUI(`Ошибка в задаче: ${err}`);
+      callback(err);
+    }
+  }, concurrency); // Количество параллельных задач
+}
