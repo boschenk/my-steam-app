@@ -1,3 +1,4 @@
+TypeScript
 export type AccountStatus = 'unknown' | 'checking' | 'available' | 'unavailable'
 
 export interface Account {
@@ -7,6 +8,10 @@ export interface Account {
   profileUrl: string
   notes: string
   status: AccountStatus
+  // Добавляем новые поля
+  login?: string
+  password?: string
+  sharedSecret?: string
   lastCheckedAt?: string
   lastError?: string
   createdAt: string
@@ -61,6 +66,10 @@ export interface AccountInput {
   label: string
   identifier: string
   notes?: string
+  // Поля для импорта
+  login?: string
+  password?: string
+  sharedSecret?: string
 }
 
 export interface TaskInput {
@@ -87,4 +96,6 @@ export interface SteamDeskApi {
     action: 'minimize' | 'maximize' | 'fullscreen' | 'close'
   ) => Promise<{ maximized: boolean; fullscreen: boolean }>
   onSnapshot: (callback: (snapshot: WorkspaceSnapshot) => void) => () => void
+  importAccounts: (accounts: AccountInput[]) => Promise<WorkspaceSnapshot>
+  submitSteamGuard: (accountId: string, code: string) => Promise<WorkspaceSnapshot>
 }
