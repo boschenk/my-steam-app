@@ -146,6 +146,44 @@ function registerIpc(): void {
     return store.clone()
   })
 
+  ipcMain.handle('accounts:import', async (_event, accountsInput: AccountInput[]) => {
+  await store.change((snapshot) => {
+    let addedCount = 0;
+    
+    for (const input of accountsInput) {
+      // Простая проверка на дубликаты по логину
+      if (snapshot.accounts.some((acc) => acc.login === input.login)) {
+        continue;
+      }
+      
+      snapshot.accounts.unshift({
+        id: randomUUID(),
+        label: input.label || input.login || 'Без имени',
+        identifier: input.identifier || input.login || '',
+        profileUrl: `https://steamcommunity.com/id/${input.login}`, // Заглушка
+        notes: input.notes ?? '',
+        status: 'checking', // Ставим статус "В процессе" (Оранжевый) при добавлении
+        login: input.login,
+        password: input.password,
+        sharedSecret: input.sharedSecret,
+        createdAt: new Date().toISOString()
+      });
+      addedCount++;
+    }
+
+    snapshot.activity.unshift({
+      id: randomUUID(),
+      level: 'success',
+      message: `Массовый импорт завершен. Добавлено аккаунтов: ${addedCount}.`,
+      createdAt: new Date().toISOString()
+    });
+  });
+  
+  // Здесь вы можете вызвать метод вашего TaskRunner для автоматического запуска логина этих аккаунтов через steam-user
+  
+  return store.clone();
+});
+  
   ipcMain.handle('tasks:resume', async (_event, taskId: string) => {
     await store.change((snapshot) => {
       const task = findTask(snapshot, taskId)
