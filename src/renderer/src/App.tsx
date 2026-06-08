@@ -639,6 +639,8 @@ function App(): React.JSX.Element {
                 rows={8}
                 placeholder={'login:password\nlogin:password:shared_secret'}
                 autoComplete="off"
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
               />
             </label>
             <div className="format-preview">
@@ -655,17 +657,35 @@ function App(): React.JSX.Element {
                 Отмена
               </button>
               <button
-                id="accounts-import-submit"
-                type="button"
-                className="button primary"
-                onClick={() => {
-                  setImportFormOpen(false)
-                  showDisconnected('Импорт аккаунтов')
-                }}
-              >
-                <FileUp size={17} />
-                Импортировать
-              </button>
+  id="accounts-import-submit"
+  type="button"
+  className="button primary"
+  onClick={async () => {
+    // Парсим текст построчно
+    const lines = importText.split('\n').map(line => line.trim()).filter(Boolean);
+    const parsedAccounts = lines.map(line => {
+      const parts = line.split(':');
+      return {
+        login: parts[0],
+        password: parts[1] || '',
+        sharedSecret: parts[2] || '',
+        label: parts[0],
+        identifier: parts[0]
+      };
+    });
+
+    await run('import-accounts', async () => {
+      const value = await window.api.importAccounts(parsedAccounts);
+      setImportFormOpen(false);
+      setImportText('');
+      setNotice({ tone: 'ok', text: `Импортировано ${parsedAccounts.length} аккаунтов.` });
+      return value;
+    });
+  }}
+>
+  <FileUp size={17} />
+  Импортировать
+</button>
             </div>
           </div>
         </Modal>
