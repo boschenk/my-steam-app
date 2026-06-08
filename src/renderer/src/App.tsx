@@ -161,6 +161,7 @@ function App(): React.JSX.Element {
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [targetUrl, setTargetUrl] = useState('')
+  const [importText, setImportText] = useState('')
   const [commentText, setCommentText] = useState('')
   const [settingsDraft, setSettingsDraft] = useState<WorkspaceSettings>(
     emptySnapshot.settings
