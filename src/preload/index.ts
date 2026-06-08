@@ -8,6 +8,8 @@ import type {
 } from '../shared/types'
 
 const api: SteamDeskApi = {
+  importAccounts: (accounts: AccountInput[]) => ipcRenderer.invoke('accounts:import', accounts),
+  submitSteamGuard: (accountId: string, code: string) => ipcRenderer.invoke('accounts:steamguard', accountId, code),
   getSnapshot: () => ipcRenderer.invoke('workspace:get'),
   addAccount: (input: AccountInput) => ipcRenderer.invoke('accounts:add', input),
   removeAccount: (accountId: string) => ipcRenderer.invoke('accounts:remove', accountId),
