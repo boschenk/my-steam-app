@@ -750,11 +750,21 @@ function App(): React.JSX.Element {
               </button>
               <div>
                 <button
-                  id="account-edit-cancel"
-                  type="button"
-                  className="button ghost"
-                  onClick={() => setEditingAccount(undefined)}
-                >
+  id="account-edit-relogin"
+  type="button"
+  className="button ghost"
+  onClick={() => {
+    // Вместо showDisconnected мы можем вызвать IPC для запуска процесса логина
+    void run(`relogin-${editingAccount.id}`, () => 
+      window.api.createTask({
+        title: `Авторизация: ${editingAccount.label}`,
+        kind: 'profile-check',
+        accountIds: [editingAccount.id]
+      })
+    );
+    setEditingAccount(undefined);
+  }}
+>
                   Отмена
                 </button>
                 <button
