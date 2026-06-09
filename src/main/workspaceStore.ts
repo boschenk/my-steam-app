@@ -1,114 +1,159 @@
+// -----------------------------------------------------------------------------
+// Файл: src/main/workspaceStore.ts
+// Описание: Хранилище состояния приложения SteamBoosted (Поддержка Ботов и CRM)
+// -----------------------------------------------------------------------------
+
 import { app } from 'electron'
+import { join } from 'path'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
-import type {
-  ActivityEntry,
-  WorkspaceSettings,
-  WorkspaceSnapshot
-} from '../shared/types'
-
-const defaultSettings: WorkspaceSettings = {
-  concurrency: 3,
-  requestTimeoutSeconds: 12,
-  itemDelayMs: 350,
-  minimizeToTray: false
-}
-
-function createDefaultSnapshot(): WorkspaceSnapshot {
-  return {
-    accounts: [],
-    tasks: [],
-    activity: [
-      {
-        id: randomUUID(),
-        level: 'info',
-        message: 'Рабочее пространство готово. Добавьте публичные профили Steam.',
-        createdAt: new Date().toISOString()
-      }
-    ],
-    settings: defaultSettings
-  }
-}
+import type { WorkspaceSnapshot, ActivityLog } from '../shared/types'
 
 export class WorkspaceStore {
-  private readonly filePath = join(app.getPath('userData'), 'steam-desk-workspace.json')
-  private snapshot: WorkspaceSnapshot = createDefaultSnapshot()
-  private writeChain: Promise<void> = Promise.resolve()
-  private onChange?: (snapshot: WorkspaceSnapshot) => void
+  private path: string
+  private snapshot: WorkspaceSnapshot
+  private listener: ((snapshot: WorkspaceSnapshot) => void) | null = null
 
-  async load(): Promise<void> {
-    try {
-      const saved = JSON.parse(await readFile(this.filePath, 'utf8')) as Partial<WorkspaceSnapshot>
-      this.snapshot = {
-        accounts: Array.isArray(saved.accounts) ? saved.accounts : [],
-        tasks: Array.isArray(saved.tasks) ? saved.tasks : [],
-        activity: Array.isArray(saved.activity) ? saved.activity.slice(0, 300) : [],
-        settings: { ...defaultSettings, ...saved.settings }
-      }
+  constructor() {
+    // Храним файл конфигурации в директории данных пользователя Electron
+    const dataPath = app ? app.getPath('userData') : process.cwd()
+    this.path = join(dataPath, 'steamboosted_store.json')
+    this.snapshot = this.getEmptySnapshot()
+  }
 
-      for (const task of this.snapshot.tasks) {
-        if (task.status === 'running') task.status = 'queued'
-        for (const item of task.items) {
-          if (item.status === 'running') item.status = 'queued'
+  private getEmptySnapshot(): WorkspaceSnapshot {
+    return {
+      // Инициализация CRM данных
+      services: [
+        {
+          id: 's-profile-default',
+          name: 'Оформление Steam Профиля',
+          category: 'Steam profile services',
+          description: 'Ручная настройка витрин, фонов и описания оператором.',
+          price: 15.0,
+          minQuantity: 1,
+          maxQuantity: 1,
+          estimatedDeliveryHrs: 12,
+          isEnabled: true,
+          requiredInputType: 'url',
+          internalNotes: 'Регламент: связаться с клиентом, запросить данные оформления.',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 's-artwork-default',
+          name: 'Продвижение Иллюстраций (Рейтинг)',
+          category: 'Steam artwork services',
+          description: 'Организация ручных оценок операторами для вывода в топ.',
+          price: 5.0,
+          minQuantity: 10,
+          maxQuantity: 500,
+          estimatedDeliveryHrs: 24,
+          isEnabled: true,
+          requiredInputType: 'url',
+          internalNotes: 'Проверить доступность ссылки перед назначением оператора.',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         }
+      ],
+      orders: [],
+      manualTasks: [],
+      crmActivity: [],
+      users: [
+        { id: 'u-admin', username: 'admin_root', role: 'admin', isActive: true, createdAt: new Date().toISOString() },
+        { id: 'u-op1', username: 'operator_dan', role: 'operator', isActive: true, createdAt: new Date().toISOString() },
+        { id: 'u-op2', username: 'operator_alex', role: 'operator', isActive: true, createdAt: new Date().toISOString() }
+      ],
+      // Инициализация данных автоматизации / аккаунтов
+      accounts: [],
+      tasks: [],
+      activity: [],
+      settings: {
+        concurrency: 3,
+        requestTimeoutSeconds: 12,
+        itemDelayMs: 350,
+        minimizeToTray: false,
+        steamApiKeyConfigured: false
       }
-    } catch {
-      this.snapshot = createDefaultSnapshot()
-      await this.persist()
     }
   }
 
-  setChangeListener(listener: (snapshot: WorkspaceSnapshot) => void): void {
-    this.onChange = listener
+  async load(): Promise<void> {
+    try {
+      if (existsSync(this.path)) {
+        const raw = readFileSync(this.path, 'utf-8')
+        const parsed = JSON.parse(raw)
+        // Безопасное слияние структур на случай миграции полей
+        this.snapshot = {
+          ...this.getEmptySnapshot(),
+          ...parsed,
+          services: parsed.services?.length ? parsed.services : this.getEmptySnapshot().services,
+          users: parsed.users?.length ? parsed.users : this.getEmptySnapshot().users
+        }
+      } else {
+        this.snapshot = this.getEmptySnapshot()
+        this.saveSync()
+      }
+    } catch (error) {
+      console.error('Ошибка при загрузке хранилища SteamBoosted:', error)
+      this.snapshot = this.getEmptySnapshot()
+    }
   }
 
-  peek(): WorkspaceSnapshot {
-    return this.snapshot
+  private saveSync(): void {
+    try {
+      writeFileSync(this.path, JSON.stringify(this.snapshot, null, 2), 'utf-8')
+    } catch (error) {
+      console.error('Ошибка при записи хранилища SteamBoosted:', error)
+    }
   }
 
   clone(): WorkspaceSnapshot {
-    return structuredClone(this.snapshot)
+    return JSON.parse(JSON.stringify(this.snapshot))
   }
 
-  async change<T>(mutator: (snapshot: WorkspaceSnapshot) => T): Promise<T> {
-    let result!: T
-    const operation = this.writeChain.catch(() => undefined).then(async () => {
-      result = mutator(this.snapshot)
-      this.snapshot.activity = this.snapshot.activity.slice(0, 300)
-      await this.persist()
-      this.onChange?.(this.clone())
-    })
-    this.writeChain = operation
-    await operation
-    return result
+  setChangeListener(callback: (snapshot: WorkspaceSnapshot) => void): void {
+    this.listener = callback
   }
 
-  async addActivity(
-    level: ActivityEntry['level'],
-    message: string,
-    persist = true
-  ): Promise<void> {
-    const add = (snapshot: WorkspaceSnapshot): void => {
-      snapshot.activity.unshift({
+  async change(action: (snapshot: WorkspaceSnapshot) => void | Promise<void>): Promise<void> {
+    await action(this.snapshot)
+    this.saveSync()
+    if (this.listener) {
+      this.listener(this.clone())
+    }
+  }
+
+  async addActivity(level: 'info' | 'success' | 'warning' | 'error', message: string): Promise<void> {
+    await this.change((s) => {
+      s.activity.unshift({
         id: randomUUID(),
         level,
         message,
         createdAt: new Date().toISOString()
       })
-    }
-
-    if (persist) {
-      await this.change(add)
-    } else {
-      add(this.snapshot)
-    }
+    })
   }
 
-  private async persist(): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true })
-    const tempPath = `${this.filePath}.tmp`
-    await writeFile(tempPath, JSON.stringify(this.snapshot, null, 2), 'utf8')
-    await rename(tempPath, this.filePath)
+  async addCrmLog(
+    userId: string | null,
+    action: string,
+    entityType: string,
+    entityId: string | null,
+    oldValue: string | null,
+    newValue: string | null
+  ): Promise<void> {
+    await this.change((s) => {
+      s.crmActivity.unshift({
+        id: randomUUID(),
+        userId,
+        action,
+        entityType,
+        entityId,
+        oldValue,
+        newValue,
+        createdAt: new Date().toISOString()
+      })
+    })
   }
 }
