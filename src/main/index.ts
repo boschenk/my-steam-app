@@ -177,12 +177,17 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('tasks:create', async (_event, input: TaskInput) => {
-    let task!
+    let task: WorkspaceTask | undefined;
+    
     await store.change((snapshot) => {
       task = createWorkspaceTask(input, snapshot)
       snapshot.tasks.unshift(task)
     })
-    await store.addActivity('info', `Создано автозадание «${task.title}» на ${task.items.length} эл.`)
+    
+    if (task) {
+      await store.addActivity('info', `Создано автозадание «${task.title}» на ${task.items.length} эл.`)
+    }
+    
     runner.kick()
     return store.clone()
   })
